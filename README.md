@@ -1,5 +1,9 @@
 # ECS Scaler
 
+| Staging | Production |
+|:-:|:-:|
+|[![Build Status](http://drone.stocktio.com/api/badge/github.com/Stockflare/lambda-ecs-scaler/status.svg?branch=master)](http://drone.stocktio.com/github.com/Stockflare/lambda-ecs-scaler)| --- |
+
 This lambda function manages the scaling of Elastic Container Services (AWS ECS) based upon Cloudwatch Alarm triggers. The function is designed to parse the alarms description (bit hacky, I know..) to determine which Cluster and Service to scale.
 
 Stockflare uses this function internally via our Cloudformations, to automate our alarms and the scaling of our own services based upon the load that they are currently receiving. We find it very reactive and most importantly, fast.

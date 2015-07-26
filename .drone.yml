@@ -1,0 +1,25 @@
+image: node:0.10
+branches:
+  - master
+script:
+  - .drone/build.sh
+env:
+  - CANNED_ACL=$$canned_acl
+  - AWS_REGION=$$aws_region
+  - AWS_BUCKET=$$aws_bucket
+  - AWS_ACCESS_KEY_ID=$$aws_access_key
+  - AWS_SECRET_ACCESS_KEY=$$aws_secret_access_key
+notify:
+  webhook:
+    urls:
+      - "https://webhooks.gitter.im/e/80b0b38eee5bbd71058d"
+    on_started: true
+    on_success: true
+    on_failure: true
+publish:
+  s3:
+    bucket: $$aws_bucket
+    access_key: $$aws_access_key
+    secret_key: $$aws_secret_access_key
+    source: dist/*.zip
+    target: lambda/

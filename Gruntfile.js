@@ -15,6 +15,7 @@ module.exports = function(grunt) {
     lambda_package: {
       default: {
         options: {
+          include_time: false
         }
       }
     },
