@@ -1,23 +1,24 @@
-# ECS Scaler
-
-| Staging | Production |
-|:-:|:-:|
-|[![Build Status](http://drone.stocktio.com/api/badge/github.com/Stockflare/lambda-ecs-scaler/status.svg?branch=master)](http://drone.stocktio.com/github.com/Stockflare/lambda-ecs-scaler)| --- |
+# Lambda ECS Scaler
 
 This lambda function manages the scaling of Elastic Container Services (AWS ECS) based upon Cloudwatch Alarm triggers. The function is designed to parse the alarms description (bit hacky, I know..) to determine which Cluster and Service to scale.
 
 Stockflare uses this function internally via our Cloudformations, to automate our alarms and the scaling of our own services based upon the load that they are currently receiving. We find it very reactive and most importantly, fast.
 
+The Scaling Strategy is a bit basic at the moment.  Firstly our ECS Cluster is provisioned via Spot Fleet and is therefore very cost effective.  We are therefore not resource constrained, so our priority is ensure sufficient container instances running to service load, scaling down accurately is less important.
+
+When an alarm enters the ```ALARM``` state we scale up, when it enters the ```OK``` state we do nothing, when it enters the ```INSUFFICIENT_DATA``` we scale down.
+
+
 ### Alarm States and Count changes
 
 | Old State         | New State         | Desired Count |
 |-------------------|-------------------|---------------|
-| ALARM             | OK                | -1            |
-| OK                | ALARM             | 1             |
+| ALARM             | OK                | 0             |
+| OK                | ALARM             | +1            |
 | ALARM             | ALARM             | 0             |
 | OK                | OK                | 0             |
-| ALARM             | INSUFFICIENT_DATA | 0             |
-| OK                | INSUFFICIENT_DATA | 0             |
+| ALARM             | INSUFFICIENT_DATA | -1            |
+| OK                | INSUFFICIENT_DATA | -1            |
 | INSUFFICIENT_DATA | INSUFFICIENT_DATA | 0             |
 | INSUFFICIENT_DATA | ALARM             | +1            |
 | INSUFFICIENT_DATA | OK                | 0             |
