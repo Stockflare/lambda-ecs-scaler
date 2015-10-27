@@ -4,8 +4,6 @@ This lambda function manages the scaling of Elastic Container Services (AWS ECS)
 
 Stockflare uses this function internally via our Cloudformations, to automate our alarms and the scaling of our own services based upon the load that they are currently receiving. We find it very reactive and most importantly, fast.
 
-The Scaling Strategy is a bit basic at the moment.  Firstly our ECS Cluster is provisioned via Spot Fleet and is therefore very cost effective.  We are therefore not resource constrained, so our priority is ensure sufficient container instances running to service load, scaling down accurately is less important.
-
 When an alarm enters the ```ALARM``` state we scale up, when it enters the ```OK``` state we do nothing, when it enters the ```INSUFFICIENT_DATA``` we scale down.
 
 
@@ -13,12 +11,12 @@ When an alarm enters the ```ALARM``` state we scale up, when it enters the ```OK
 
 | Old State         | New State         | Desired Count |
 |-------------------|-------------------|---------------|
-| ALARM             | OK                | 0             |
+| ALARM             | OK                | -1            |
 | OK                | ALARM             | +1            |
 | ALARM             | ALARM             | 0             |
 | OK                | OK                | 0             |
 | ALARM             | INSUFFICIENT_DATA | -1            |
-| OK                | INSUFFICIENT_DATA | -1            |
+| OK                | INSUFFICIENT_DATA | 0             |
 | INSUFFICIENT_DATA | INSUFFICIENT_DATA | 0             |
 | INSUFFICIENT_DATA | ALARM             | +1            |
 | INSUFFICIENT_DATA | OK                | 0             |
@@ -39,7 +37,8 @@ Here is an example of how we build Cloudwatch Alarms that trigger this function 
       "AlarmDescription": { "Fn::Base64": { "Fn::Join" : ["", [
         "{",
           "\"service\":\"", { "Ref" : "Service" }, "\",",
-          "\"cluster\":\"", { "Ref" : "ECSCluster" }, "\"",
+          "\"cluster\":\"", { "Fn::GetAtt": [ "ECS", "ECSCluster" ] }, "\",",
+          "\"scaling_adjustment\":\"10\"",
         "}"
       ]]}},
       "MetricName": "RequestCount",
@@ -64,6 +63,14 @@ Here is an example of how we build Cloudwatch Alarms that trigger this function 
 ```
 
 Note that the AlarmDescription encodes using base64, a JSON Object containing the Service and Cluster name to scale.
+
+#### Alarm Description Parameters
+
+| Parameter | Value | Required |
+|-----------|-------|----------|
+| service   | Service Name | Yes |
+| cluster   | ECS Cluster | Yes |
+| scaling_adjustment   | Number of instances to scale, can be negative | NO |
 
 ---
 

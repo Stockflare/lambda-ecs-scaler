@@ -48,12 +48,27 @@ exports.handler = function (event, context) {
               console.log(err, err.stack);
               throw err.stack;
             } else {
+
+              var scaling_adjustment = 1;
+              if (!_.isUndefined(ecs.scaling_adjustment)) {
+                scaling_adjustment = parseInt(ecs.scaling_adjustment);
+              }
+
+
+              console.log("scaling_adjustment");
+              console.log(scaling_adjustment);
+
               var att = {
                 desired: data.services[0].desiredCount,
                 running: data.services[0].runningCount,
                 pending: data.services[0].pendingCount,
-                outcome: data.services[0].desiredCount + direction
+                outcome: data.services[0].desiredCount + (direction * parseInt(scaling_adjustment))
               };
+
+              if (att.outcome < 1) {
+                att.outcome = 1;
+              }
+
               if(att.desired !== att.outcome && att.outcome > 0) {
                 console.log("adjusting from " + att.desired + " to " + att.outcome);
                 var params = {
@@ -109,7 +124,7 @@ var determineDirection = function(oldState, newState) {
     case "ALARM":
       switch(newState) {
         case "OK":
-          return 0;
+          return -1;
         case "INSUFFICIENT_DATA":
           return -1;
       }
@@ -119,7 +134,7 @@ var determineDirection = function(oldState, newState) {
         case "ALARM":
           return 1;
         case "INSUFFICIENT_DATA":
-          return -1;
+          return 0;
       }
       break;
   }
