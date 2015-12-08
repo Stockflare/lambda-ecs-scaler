@@ -1,93 +1,113 @@
-// event = {
-//     "AlarmName": "test-alarm",
-//     "AlarmDescription": "eydzZXJ2aWNlJzonYXJuOmF3czplY3M6dXMtZWFzdC0xOjMxODc0MTU3NzU5ODpzZXJ2aWNlL3NlcnZpLVNlcnZpLTE1NklJVUNGNjFNWUMnLCdjbHVzdGVyJzonY29yZW8tRUNTQ2wtMU5TU0hMQlZNMTVZWid9",
-//     "AWSAccountId": "318741577598",
-//     "NewStateValue": "OK",
-//     "NewStateReason": "Threshold Crossed: 1 datapoint (1.0) was greater than or equal to the threshold (0.0).",
-//     "StateChangeTime": "2015-07-17T15:18:01.441+0000",
-//     "Region": "US - N. Virginia",
-//     "OldStateValue": "ALARM",
-//     "Trigger": {
-//         "MetricName": "RequestCount",
-//         "Namespace": "AWS/ELB",
-//         "Statistic": "AVERAGE",
-//         "Unit": null,
-//         "Dimensions": [
-//             {
-//                 "name": "LoadBalancerName",
-//                 "value": "service-ElasticLoa-DHXVMAJPOW55"
-//             }
-//         ],
-//         "Period": 300,
-//         "EvaluationPeriods": 1,
-//         "ComparisonOperator": "GreaterThanOrEqualToThreshold",
-//         "Threshold": 0
-//     }
-// }
+var _ = require('underscore');
+var when = require('when');
+var aws = require('aws-sdk');
+
 exports.handler = function (event, context) {
+  console.log('Event');
+  console.log(event);
+  var records = event.Records;
+  console.log('Records');
+  console.log(records);
 
-  var aws = require('aws-sdk');
+  var actions = _.map(records, function(record, index, all_records){
+    return when.promise(function(resolve, reject, notify){
+      console.log('record');
+      console.log(record);
 
-  try {
-    var newState = event.NewStateValue;
-    var oldState = event.OldStateValue;
-    var direction = determineDirection(oldState, newState);
+      var message_json = record.Sns.Message;
+      console.log('message_json');
+      console.log(message_json);
+      var message = JSON.parse(message_json);
+      console.log('message');
+      console.log(message);
 
-    console.log("here...");
+      try {
+        var newState = message.NewStateValue;
+        var oldState = message.OldStateValue;
+        var direction = determineDirection(oldState, newState);
 
-    if(newState != oldState && direction !== 0) {
+        if(newState != oldState && direction !== 0) {
+          console.log('Attempting Scaling');
 
-      var ecs = decode(event.AlarmDescription);
-      var region = regionToCode(event.Region);
+          var ecs = decode(message.AlarmDescription);
+          console.log('ecs');
+          console.log(ecs);
+          var region = regionToCode(message.Region);
+          console.log('region');
+          console.log(region);
 
-      console.log("here...");
 
-      if( ! ecs.service || ! ecs.cluster) throw "expecting (JSON) { 'service': '...', 'cluster': '...' }";
+          if( ! ecs.service || ! ecs.cluster) throw "expecting (JSON) { 'service': '...', 'cluster': '...' }";
 
-      console.log("alarm triggered for " + ecs.service + " in region " + region);
+          console.log("alarm triggered for " + ecs.service + " in region " + region);
 
-      var cluster = new aws.ECS({ region: region });
+          var cluster = new aws.ECS({ region: region });
 
-      cluster.describeServices({ cluster: ecs.cluster, services: [ ecs.service ] }, function(err, data) {
-        if (err) {
-          console.log(err, err.stack);
-          throw err.stack;
-        } else {
-          var att = {
-            desired: data.services[0].desiredCount,
-            running: data.services[0].runningCount,
-            pending: data.services[0].pendingCount,
-            outcome: data.services[0].desiredCount + direction
-          };
-          if(att.desired > att.outcome > 0 || att.pending === 0) {
-            console.log("adjusting from " + att.desired + " to " + att.outcome);
-            var params = {
-              service: ecs.service,
-              cluster: ecs.cluster,
-              desiredCount: att.outcome
-            }
-            cluster.updateService(params, function(err, data) {
-              if (err) {
-                console.log(err, err.stack);
-                throw err.stack;
-              } else {
-                console.log(data);
-                context.succeed();
+          cluster.describeServices({ cluster: ecs.cluster, services: [ ecs.service ] }, function(err, data) {
+            if (err) {
+              console.log(err, err.stack);
+              throw err.stack;
+            } else {
+
+              var scaling_adjustment = 1;
+              if (!_.isUndefined(ecs.scaling_adjustment)) {
+                scaling_adjustment = parseInt(ecs.scaling_adjustment);
               }
-            });
-          } else {
-            var reason = JSON.stringify(att);
-            context.succeed({ message: 'no action: [' + reason + ']' });
-          }
-        }
-      });
 
-    } else {
-      context.succeed({ message: 'no action necessary: [' + oldState + '] => [' + newState + ']' });
-    }
-  } catch(e) {
-    context.fail(e);
-  }
+
+              console.log("scaling_adjustment");
+              console.log(scaling_adjustment);
+
+              var att = {
+                desired: data.services[0].desiredCount,
+                running: data.services[0].runningCount,
+                pending: data.services[0].pendingCount,
+                outcome: data.services[0].desiredCount + (direction * parseInt(scaling_adjustment))
+              };
+
+              if (att.outcome < 1) {
+                att.outcome = 1;
+              }
+
+              if(att.desired !== att.outcome && att.outcome > 0) {
+                console.log("adjusting from " + att.desired + " to " + att.outcome);
+                var params = {
+                  service: ecs.service,
+                  cluster: ecs.cluster,
+                  desiredCount: att.outcome
+                };
+                cluster.updateService(params, function(err, data) {
+                  if (err) {
+                    console.log(err, err.stack);
+                    throw err.stack;
+                  } else {
+                    console.log(data);
+                    resolve({message: "adjusting from " + att.desired + " to " + att.outcome});
+                  }
+                });
+              } else {
+                var reason = JSON.stringify(att);
+                resolve({ message: 'no action: [' + reason + ']' });
+              }
+            }
+          });
+
+        } else {
+          resolve({ message: 'no action necessary: [' + oldState + '] => [' + newState + ']' });
+        }
+      } catch(e) {
+        console.log("ERROR processing message", e);
+        reject(e);
+      }
+    });
+  });
+
+  when.all(actions).done(function(records){
+    context.succeed("Successfully processed " + records.length + " records.");
+  }, function(reason){
+    context.fail("Failed to process records " + reason);
+  });
+
 
 };
 
@@ -106,7 +126,7 @@ var determineDirection = function(oldState, newState) {
         case "OK":
           return -1;
         case "INSUFFICIENT_DATA":
-          return 0;
+          return -1;
       }
       break;
     case "OK":
