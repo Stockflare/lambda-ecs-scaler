@@ -1,7 +1,7 @@
 {
   "name": "lambda-ecs-scaler",
   "description": "Lambda function for Scaling ECS Services using tags",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "private": "true",
   "dependencies": {
     "aws-sdk": "2.1.39",
