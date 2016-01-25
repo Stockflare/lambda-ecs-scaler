@@ -1,25 +1,16 @@
 var _ = require('underscore');
 var when = require('when');
 var aws = require('aws-sdk');
+var min_instaces = 3;
 
 exports.handler = function (event, context) {
-  console.log('Event');
-  console.log(event);
   var records = event.Records;
-  console.log('Records');
-  console.log(records);
 
   var actions = _.map(records, function(record, index, all_records){
     return when.promise(function(resolve, reject, notify){
-      console.log('record');
-      console.log(record);
 
       var message_json = record.Sns.Message;
-      console.log('message_json');
-      console.log(message_json);
       var message = JSON.parse(message_json);
-      console.log('message');
-      console.log(message);
 
       try {
         var newState = message.NewStateValue;
@@ -27,14 +18,9 @@ exports.handler = function (event, context) {
         var direction = determineDirection(oldState, newState);
 
         if(newState != oldState && direction !== 0) {
-          console.log('Attempting Scaling');
 
           var ecs = decode(message.AlarmDescription);
-          console.log('ecs');
-          console.log(ecs);
           var region = regionToCode(message.Region);
-          console.log('region');
-          console.log(region);
 
 
           if( ! ecs.service || ! ecs.cluster) throw "expecting (JSON) { 'service': '...', 'cluster': '...' }";
@@ -55,8 +41,6 @@ exports.handler = function (event, context) {
               }
 
 
-              console.log("scaling_adjustment");
-              console.log(scaling_adjustment);
 
               var att = {
                 desired: data.services[0].desiredCount,
@@ -65,8 +49,8 @@ exports.handler = function (event, context) {
                 outcome: data.services[0].desiredCount + (direction * parseInt(scaling_adjustment))
               };
 
-              if (att.outcome < 1) {
-                att.outcome = 1;
+              if (att.outcome < min_instaces) {
+                att.outcome = min_instaces;
               }
 
               if(att.desired !== att.outcome && att.outcome > 0) {
