@@ -126,7 +126,7 @@ var determineDirection = function(oldState, newState) {
 
 var regionToCode = function(region) {
   switch(region) {
-    case "US - N. Virginia":
+    case "US East - N. Virginia":
       return "us-east-1";
     default:
       throw "unable to determine region code: " + region;
