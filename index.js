@@ -2,13 +2,14 @@ var _ = require('underscore');
 var when = require('when');
 var aws = require('aws-sdk');
 var min_instaces = 3;
+var max_instances = 64;
 
 exports.handler = function (event, context) {
   var records = event.Records;
 
   var actions = _.map(records, function(record, index, all_records){
     return when.promise(function(resolve, reject, notify){
-
+      console.log(record);
       var message_json = record.Sns.Message;
       var message = JSON.parse(message_json);
 
@@ -39,6 +40,14 @@ exports.handler = function (event, context) {
               if (!_.isUndefined(ecs.scaling_adjustment)) {
                 scaling_adjustment = parseInt(ecs.scaling_adjustment);
               }
+              var desired_min = min_instaces;
+              if (!_.isUndefined(ecs.min)) {
+                desired_min = parseInt(ecs.min);
+              }
+              var desired_max = max_instances;
+              if (!_.isUndefined(ecs.max)) {
+                desired_max = parseInt(ecs.max);
+              }
 
 
 
@@ -49,8 +58,11 @@ exports.handler = function (event, context) {
                 outcome: data.services[0].desiredCount + (direction * parseInt(scaling_adjustment))
               };
 
-              if (att.outcome < min_instaces) {
-                att.outcome = min_instaces;
+              if (att.outcome < desired_min) {
+                att.outcome = desired_min;
+              }
+              if (att.outcome > desired_max) {
+                att.outcome = desired_max;
               }
 
               if(att.desired !== att.outcome && att.outcome > 0) {
@@ -65,7 +77,6 @@ exports.handler = function (event, context) {
                     console.log(err, err.stack);
                     throw err.stack;
                   } else {
-                    console.log(data);
                     resolve({message: "adjusting from " + att.desired + " to " + att.outcome});
                   }
                 });
